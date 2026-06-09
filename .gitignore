@@ -4,3 +4,5 @@ AppIcon.iconset/
 *.app/
 *.xcodeproj
 .swiftpm/
+*.dmg
+dist/
