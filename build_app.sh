@@ -4,7 +4,7 @@ cd "$(dirname "$0")"
 
 APP_NAME="北京时间万年历"
 BUNDLE_ID="com.hx10.beijingtimecalendar"
-VERSION="1.2"
+VERSION="1.3"
 BUILD_DIR=".build/release"
 APP_DIR="$APP_NAME.app"
 
@@ -34,6 +34,8 @@ cat > "$APP_DIR/Contents/Info.plist" <<PLIST
     <string>$BUNDLE_ID</string>
     <key>CFBundleExecutable</key>
     <string>$APP_NAME</string>
+    <key>CFBundleDevelopmentRegion</key>
+    <string>zh-Hans</string>
     <key>CFBundleIconFile</key>
     <string>AppIcon</string>
     <key>CFBundleVersion</key>
@@ -51,6 +53,18 @@ cat > "$APP_DIR/Contents/Info.plist" <<PLIST
 </dict>
 </plist>
 PLIST
+
+# 本地化应用显示名：中文环境「北京时间万年历」，英文环境 oclock
+mkdir -p "$APP_DIR/Contents/Resources/zh-Hans.lproj"
+mkdir -p "$APP_DIR/Contents/Resources/en.lproj"
+cat > "$APP_DIR/Contents/Resources/zh-Hans.lproj/InfoPlist.strings" <<'STR'
+"CFBundleName" = "北京时间万年历";
+"CFBundleDisplayName" = "北京时间万年历";
+STR
+cat > "$APP_DIR/Contents/Resources/en.lproj/InfoPlist.strings" <<'STR'
+"CFBundleName" = "oclock";
+"CFBundleDisplayName" = "oclock";
+STR
 
 # 临时签名，避免 Gatekeeper 拦截
 codesign --force --deep --sign - "$APP_DIR" 2>/dev/null || true
