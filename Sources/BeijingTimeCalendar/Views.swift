@@ -144,6 +144,7 @@ struct WeekdayHeader: View {
 
 struct MonthGrid: View {
     @EnvironmentObject var settings: AppSettings
+    @EnvironmentObject var clock: Clock
     @ObservedObject var model: CalendarModel
 
     var body: some View {
@@ -154,7 +155,7 @@ struct MonthGrid: View {
             ForEach(days) { info in
                 DayCellView(
                     info: info,
-                    isToday: sameDay(info.date, Date(), tz),
+                    isToday: sameDay(info.date, clock.now, tz),
                     isSelected: sameDay(info.date, model.selected, tz)
                 )
                 .onTapGesture { model.selected = info.date }
