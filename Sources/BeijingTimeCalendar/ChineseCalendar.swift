@@ -87,7 +87,8 @@ enum CN {
 // MARK: - 单日信息
 
 struct DayInfo: Identifiable {
-    let id = UUID()
+    // 用日期本身作为稳定 id，避免每秒刷新时 ForEach 全量重建导致 AttributeGraph 崩溃
+    var id: TimeInterval { date.timeIntervalSinceReferenceDate }
     let date: Date
     let solarDay: Int
     let isCurrentMonth: Bool
