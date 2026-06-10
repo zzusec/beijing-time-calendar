@@ -328,6 +328,7 @@ struct FooterBar: View {
 
 struct SettingsPanel: View {
     @EnvironmentObject var settings: AppSettings
+    @StateObject private var updater = Updater()
     @State private var launchAtLogin = LoginItem.isEnabled
 
     var body: some View {
@@ -363,9 +364,49 @@ struct SettingsPanel: View {
             }
             .toggleStyle(.switch)
             .controlSize(.small)
+
+            Divider()
+
+            HStack(spacing: 8) {
+                Text("版本 \(AppInfo.version)").font(.system(size: 12))
+                Spacer()
+                updateStatusView
+                Button {
+                    updater.check()
+                } label: {
+                    Text("检查更新").font(.system(size: 11, weight: .medium))
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .disabled(updater.status == .checking)
+            }
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
         .onAppear { launchAtLogin = LoginItem.isEnabled }
+    }
+
+    @ViewBuilder
+    var updateStatusView: some View {
+        switch updater.status {
+        case .idle:
+            EmptyView()
+        case .checking:
+            ProgressView().controlSize(.small).scaleEffect(0.7)
+        case .upToDate:
+            Text("已是最新").font(.system(size: 11)).foregroundStyle(.secondary)
+        case .available(let v, let url):
+            Button {
+                NSWorkspace.shared.open(url)
+            } label: {
+                Text("发现 \(v)，去下载").font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 8).padding(.vertical, 2)
+                    .background(Color.orange).clipShape(Capsule())
+            }
+            .buttonStyle(.plain)
+        case .failed(let msg):
+            Text(msg).font(.system(size: 11)).foregroundStyle(.red)
+        }
     }
 }

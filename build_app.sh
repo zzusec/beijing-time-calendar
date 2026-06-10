@@ -4,6 +4,7 @@ cd "$(dirname "$0")"
 
 APP_NAME="北京时间万年历"
 BUNDLE_ID="com.hx10.beijingtimecalendar"
+VERSION="1.1"
 BUILD_DIR=".build/release"
 APP_DIR="$APP_NAME.app"
 
@@ -36,9 +37,9 @@ cat > "$APP_DIR/Contents/Info.plist" <<PLIST
     <key>CFBundleIconFile</key>
     <string>AppIcon</string>
     <key>CFBundleVersion</key>
-    <string>1.0</string>
+    <string>$VERSION</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.0</string>
+    <string>$VERSION</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>LSMinimumSystemVersion</key>
