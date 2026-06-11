@@ -7,6 +7,8 @@ final class CalendarModel: ObservableObject {
     @Published var anchor: Date   // 显示月份内任意一天
     @Published var selected: Date
 
+    private var lastToday = Date()
+
     init() {
         anchor = Date()
         selected = Date()
@@ -20,6 +22,15 @@ final class CalendarModel: ObservableObject {
     func goToday() {
         anchor = Date()
         selected = Date()
+        lastToday = Date()
+    }
+
+    /// 跨午夜时若用户仍停留在「今天」（未手动选其他日期），则让选中跟随到新的今天
+    func refreshToday(_ now: Date, tz: TimeZone) {
+        let cal = CN.gregorian(tz)
+        guard !cal.isDate(now, inSameDayAs: lastToday) else { return }
+        if cal.isDate(selected, inSameDayAs: lastToday) { selected = now }
+        lastToday = now
     }
 }
 
@@ -50,6 +61,7 @@ struct CalendarPopover: View {
         }
         .frame(width: 340)
         .background(Color(nsColor: .windowBackgroundColor))
+        .onReceive(clock.$now) { model.refreshToday($0, tz: settings.timeZone) }
     }
 }
 
