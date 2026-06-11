@@ -50,10 +50,20 @@ final class Clock: ObservableObject {
     private var timer: Timer?
 
     init() {
-        timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+        scheduleNextTick()
+    }
+
+    /// 对齐到整秒边界刷新，避免显示相位滞后导致看起来慢一秒
+    private func scheduleNextTick() {
+        let nowTI = Date().timeIntervalSinceReferenceDate
+        // 下一个整秒 + 20ms 余量，确保读到的就是新的整秒
+        let delay = floor(nowTI) + 1.0 + 0.02 - nowTI
+        let t = Timer(timeInterval: delay, repeats: false) { [weak self] _ in
             self?.now = Date()
+            self?.scheduleNextTick()
         }
-        RunLoop.main.add(timer!, forMode: .common)
+        RunLoop.main.add(t, forMode: .common)
+        timer = t
     }
 
     func menuBarText(settings: AppSettings) -> String {
