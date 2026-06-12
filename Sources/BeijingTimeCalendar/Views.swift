@@ -340,6 +340,7 @@ struct FooterBar: View {
 
 struct SettingsPanel: View {
     @EnvironmentObject var settings: AppSettings
+    @EnvironmentObject var clock: Clock
     @StateObject private var updater = Updater()
     @State private var launchAtLogin = LoginItem.isEnabled
 
@@ -379,6 +380,43 @@ struct SettingsPanel: View {
 
             Divider()
 
+            // NTP 网络校时
+            HStack {
+                Text("校时服务器").font(.system(size: 12, weight: .medium))
+                Spacer()
+                Menu(ntpLabel) {
+                    ForEach(AppSettings.ntpServers, id: \.0) { s in
+                        Button("\(s.1)  (\(s.0))") {
+                            settings.ntpServer = s.0
+                            clock.setServer(s.0)
+                        }
+                    }
+                }
+                .frame(width: 150)
+            }
+            TextField("自定义 NTP 服务器", text: Binding(
+                get: { settings.ntpServer },
+                set: { settings.ntpServer = $0 }
+            ))
+            .textFieldStyle(.roundedBorder)
+            .font(.system(size: 11))
+            .onSubmit { clock.setServer(settings.ntpServer) }
+
+            HStack(spacing: 8) {
+                syncStatusView
+                Spacer()
+                Button {
+                    clock.setServer(settings.ntpServer)
+                } label: {
+                    Text("立即校时").font(.system(size: 11, weight: .medium))
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .disabled(clock.syncStatus == .syncing)
+            }
+
+            Divider()
+
             HStack(spacing: 8) {
                 Text("版本 \(AppInfo.version)").font(.system(size: 12))
                 Spacer()
@@ -396,6 +434,30 @@ struct SettingsPanel: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
         .onAppear { launchAtLogin = LoginItem.isEnabled }
+    }
+
+    var ntpLabel: String {
+        AppSettings.ntpServers.first { $0.0 == settings.ntpServer }?.1 ?? settings.ntpServer
+    }
+
+    @ViewBuilder
+    var syncStatusView: some View {
+        switch clock.syncStatus {
+        case .idle:
+            EmptyView()
+        case .syncing:
+            HStack(spacing: 4) {
+                ProgressView().controlSize(.small).scaleEffect(0.7)
+                Text("校时中…").font(.system(size: 11)).foregroundStyle(.secondary)
+            }
+        case .synced(let off):
+            let ms = Int(abs(off) * 1000)
+            Text(ms <= 50 ? "已校准 · 误差<50ms"
+                          : "已校准 · 本地\(off > 0 ? "慢" : "快")\(ms)ms")
+                .font(.system(size: 11)).foregroundStyle(.green)
+        case .failed:
+            Text("校时失败，检查网络/服务器").font(.system(size: 11)).foregroundStyle(.red)
+        }
     }
 
     @ViewBuilder

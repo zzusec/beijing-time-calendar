@@ -46,11 +46,50 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 // MARK: - 时钟
 
 final class Clock: ObservableObject {
+    enum SyncStatus: Equatable { case idle, syncing, synced(TimeInterval), failed }
+
     @Published var now = Date()
+    @Published var syncStatus: SyncStatus = .idle
+
     private var timer: Timer?
+    private var ntpOffset: TimeInterval = 0      // 真实时间 = 本地时间 + ntpOffset
+    private var currentServer: String
+    private var lastSync = Date.distantPast
+    private var isSyncing = false
 
     init() {
+        currentServer = UserDefaults.standard.string(forKey: "ntpServer") ?? AppSettings.defaultNTP
         scheduleNextTick()
+        sync()
+    }
+
+    /// 切换/重设校时服务器并立即校时
+    func setServer(_ host: String) {
+        let h = host.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !h.isEmpty else { return }
+        currentServer = h
+        sync()
+    }
+
+    /// 向 NTP 服务器校时，更新偏移
+    func sync() {
+        if isSyncing { return }
+        isSyncing = true
+        syncStatus = .syncing
+        let server = currentServer
+        Task {
+            let result = try? await NTPClient.offset(host: server)
+            await MainActor.run {
+                self.isSyncing = false
+                self.lastSync = Date()
+                if let off = result {
+                    self.ntpOffset = off
+                    self.syncStatus = .synced(off)
+                } else {
+                    self.syncStatus = .failed
+                }
+            }
+        }
     }
 
     /// 对齐到整秒边界刷新，避免显示相位滞后导致看起来慢一秒
@@ -59,8 +98,10 @@ final class Clock: ObservableObject {
         // 下一个整秒 + 20ms 余量，确保读到的就是新的整秒
         let delay = floor(nowTI) + 1.0 + 0.02 - nowTI
         let t = Timer(timeInterval: delay, repeats: false) { [weak self] _ in
-            self?.now = Date()
-            self?.scheduleNextTick()
+            guard let self = self else { return }
+            self.now = Date().addingTimeInterval(self.ntpOffset)
+            if Date().timeIntervalSince(self.lastSync) > 600 { self.sync() } // 每10分钟自动重校
+            self.scheduleNextTick()
         }
         RunLoop.main.add(t, forMode: .common)
         timer = t
@@ -91,10 +132,25 @@ final class AppSettings: ObservableObject {
     @AppStorage("showSeconds") var showSeconds: Bool = false {
         didSet { objectWillChange.send() }
     }
+    @AppStorage("ntpServer") var ntpServer: String = AppSettings.defaultNTP {
+        didSet { objectWillChange.send() }
+    }
 
     var timeZone: TimeZone {
         TimeZone(identifier: timeZoneID) ?? TimeZone(identifier: "Asia/Shanghai")!
     }
+
+    static let defaultNTP = "ntp.aliyun.com"
+
+    // 常用 NTP 校时服务器
+    static let ntpServers: [(String, String)] = [
+        ("ntp.aliyun.com", "阿里云"),
+        ("ntp.ntsc.ac.cn", "国家授时中心"),
+        ("cn.pool.ntp.org", "NTP Pool 中国"),
+        ("time.apple.com", "Apple"),
+        ("time.windows.com", "Microsoft"),
+        ("time.cloudflare.com", "Cloudflare")
+    ]
 
     // 常用时区候选
     static let commonZones: [(String, String)] = [
