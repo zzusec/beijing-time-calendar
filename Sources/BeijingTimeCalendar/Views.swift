@@ -350,18 +350,25 @@ struct SettingsPanel: View {
     @EnvironmentObject var clock: Clock
     @StateObject private var updater = Updater()
     @State private var launchAtLogin = LoginItem.isEnabled
-    @State private var newServer = ""
+    @State private var customInput = ""
 
-    private func selectServer(_ host: String) {
+    /// 选择预置服务器：固定地址，只读
+    private func selectPreset(_ host: String) {
+        settings.useCustomNTP = false
         settings.ntpServer = host
         clock.setServer(host)
     }
-    private func addServer() {
-        let h = newServer.trimmingCharacters(in: .whitespaces)
+    /// 切到自定义模式：下方显示输入框
+    private func enableCustom() {
+        settings.useCustomNTP = true
+        customInput = AppSettings.ntpServers.contains { $0.0 == settings.ntpServer } ? "" : settings.ntpServer
+    }
+    /// 应用自定义输入的服务器
+    private func applyCustom() {
+        let h = customInput.trimmingCharacters(in: .whitespaces)
         guard !h.isEmpty else { return }
-        settings.addCustomServer(h)
-        clock.setServer(settings.ntpServer)
-        newServer = ""
+        settings.ntpServer = h
+        clock.setServer(h)
     }
 
     var body: some View {
@@ -406,25 +413,34 @@ struct SettingsPanel: View {
                 Spacer()
                 Menu(ntpLabel) {
                     ForEach(AppSettings.ntpServers, id: \.0) { s in
-                        Button("\(s.1)  (\(s.0))") { selectServer(s.0) }
+                        Button("\(s.1)  (\(s.0))") { selectPreset(s.0) }
                     }
-                    if !settings.customServers.isEmpty {
-                        Divider()
-                        ForEach(settings.customServers, id: \.self) { s in
-                            Button(s) { selectServer(s) }
-                        }
-                    }
+                    Divider()
+                    Button("自定义…") { enableCustom() }
                 }
                 .frame(width: 150)
             }
-            HStack(spacing: 6) {
-                TextField("新增自定义 NTP 服务器", text: $newServer)
-                    .textFieldStyle(.roundedBorder)
-                    .font(.system(size: 11))
-                    .onSubmit { addServer() }
-                Button("添加") { addServer() }
-                    .controlSize(.small)
-                    .disabled(newServer.trimmingCharacters(in: .whitespaces).isEmpty)
+            if settings.useCustomNTP {
+                // 自定义模式：可输入
+                HStack(spacing: 6) {
+                    TextField("输入自定义 NTP 服务器", text: $customInput)
+                        .textFieldStyle(.roundedBorder)
+                        .font(.system(size: 11))
+                        .onSubmit { applyCustom() }
+                    Button("应用") { applyCustom() }
+                        .controlSize(.small)
+                        .disabled(customInput.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
+            } else {
+                // 预置模式：只读展示地址
+                HStack {
+                    Text("地址").font(.system(size: 11)).foregroundStyle(.secondary)
+                    Spacer()
+                    Text(settings.ntpServer)
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+                }
             }
 
             HStack(spacing: 8) {
@@ -458,11 +474,15 @@ struct SettingsPanel: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
-        .onAppear { launchAtLogin = LoginItem.isEnabled }
+        .onAppear {
+            launchAtLogin = LoginItem.isEnabled
+            if settings.useCustomNTP { customInput = settings.ntpServer }
+        }
     }
 
     var ntpLabel: String {
-        AppSettings.ntpServers.first { $0.0 == settings.ntpServer }?.1 ?? settings.ntpServer
+        if settings.useCustomNTP { return "自定义" }
+        return AppSettings.ntpServers.first { $0.0 == settings.ntpServer }?.1 ?? settings.ntpServer
     }
 
     @ViewBuilder
