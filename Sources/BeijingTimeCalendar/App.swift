@@ -100,7 +100,8 @@ final class Clock: ObservableObject {
         let t = Timer(timeInterval: delay, repeats: false) { [weak self] _ in
             guard let self = self else { return }
             self.now = Date().addingTimeInterval(self.ntpOffset)
-            if Date().timeIntervalSince(self.lastSync) > 600 { self.sync() } // 每10分钟自动重校
+            // 后台每 6 小时自动校准一次
+            if Date().timeIntervalSince(self.lastSync) > 6 * 3600 { self.sync() }
             self.scheduleNextTick()
         }
         RunLoop.main.add(t, forMode: .common)
@@ -134,6 +135,22 @@ final class AppSettings: ObservableObject {
     }
     @AppStorage("ntpServer") var ntpServer: String = AppSettings.defaultNTP {
         didSet { objectWillChange.send() }
+    }
+    // 用户新增的自定义 NTP 服务器（换行分隔持久化）
+    @AppStorage("customNTPServers") var customServersRaw: String = "" {
+        didSet { objectWillChange.send() }
+    }
+    var customServers: [String] {
+        customServersRaw.split(separator: "\n").map(String.init).filter { !$0.isEmpty }
+    }
+    /// 新增自定义服务器并设为当前；预置/已存在则直接选中，不重复添加
+    func addCustomServer(_ host: String) {
+        let h = host.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !h.isEmpty else { return }
+        if !AppSettings.ntpServers.contains(where: { $0.0 == h }), !customServers.contains(h) {
+            customServersRaw = (customServers + [h]).joined(separator: "\n")
+        }
+        ntpServer = h
     }
 
     var timeZone: TimeZone {

@@ -343,6 +343,19 @@ struct SettingsPanel: View {
     @EnvironmentObject var clock: Clock
     @StateObject private var updater = Updater()
     @State private var launchAtLogin = LoginItem.isEnabled
+    @State private var newServer = ""
+
+    private func selectServer(_ host: String) {
+        settings.ntpServer = host
+        clock.setServer(host)
+    }
+    private func addServer() {
+        let h = newServer.trimmingCharacters(in: .whitespaces)
+        guard !h.isEmpty else { return }
+        settings.addCustomServer(h)
+        clock.setServer(settings.ntpServer)
+        newServer = ""
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -386,21 +399,26 @@ struct SettingsPanel: View {
                 Spacer()
                 Menu(ntpLabel) {
                     ForEach(AppSettings.ntpServers, id: \.0) { s in
-                        Button("\(s.1)  (\(s.0))") {
-                            settings.ntpServer = s.0
-                            clock.setServer(s.0)
+                        Button("\(s.1)  (\(s.0))") { selectServer(s.0) }
+                    }
+                    if !settings.customServers.isEmpty {
+                        Divider()
+                        ForEach(settings.customServers, id: \.self) { s in
+                            Button(s) { selectServer(s) }
                         }
                     }
                 }
                 .frame(width: 150)
             }
-            TextField("自定义 NTP 服务器", text: Binding(
-                get: { settings.ntpServer },
-                set: { settings.ntpServer = $0 }
-            ))
-            .textFieldStyle(.roundedBorder)
-            .font(.system(size: 11))
-            .onSubmit { clock.setServer(settings.ntpServer) }
+            HStack(spacing: 6) {
+                TextField("新增自定义 NTP 服务器", text: $newServer)
+                    .textFieldStyle(.roundedBorder)
+                    .font(.system(size: 11))
+                    .onSubmit { addServer() }
+                Button("添加") { addServer() }
+                    .controlSize(.small)
+                    .disabled(newServer.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
 
             HStack(spacing: 8) {
                 syncStatusView
