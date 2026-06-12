@@ -318,7 +318,14 @@ struct FooterBar: View {
             Button {
                 withAnimation(.easeInOut(duration: 0.15)) { showSettings.toggle() }
             } label: {
-                Label("设置", systemImage: "gearshape")
+                HStack(spacing: 4) {
+                    Image(systemName: "gearshape")
+                    Text("设置")
+                    Image(systemName: "chevron.up")
+                        .font(.system(size: 9, weight: .semibold))
+                        .rotationEffect(.degrees(showSettings ? 0 : 180))
+                        .foregroundStyle(.secondary)
+                }
             }
             .buttonStyle(.borderless)
             Spacer()
