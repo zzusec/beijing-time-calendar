@@ -4,7 +4,7 @@ cd "$(dirname "$0")"
 
 APP_NAME="北京时间万年历"
 BUNDLE_ID="com.hx10.beijingtimecalendar"
-VERSION="1.9"
+VERSION="1.10"
 BUILD_DIR=".build/release"
 APP_DIR="$APP_NAME.app"
 

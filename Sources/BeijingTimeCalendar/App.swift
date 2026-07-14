@@ -45,8 +45,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
 // MARK: - 时钟
 
+@MainActor
 final class Clock: ObservableObject {
-    enum SyncStatus: Equatable { case idle, syncing, synced(TimeInterval), failed }
+    enum SyncStatus: Equatable { case idle, syncing, synced(TimeSyncResult), failed(String) }
 
     @Published var now = Date()
     @Published var syncStatus: SyncStatus = .idle
@@ -54,55 +55,82 @@ final class Clock: ObservableObject {
     private var timer: Timer?
     private var ntpOffset: TimeInterval = 0      // 真实时间 = 本地时间 + ntpOffset
     private var currentServer: String
-    private var lastSync = Date.distantPast
-    private var isSyncing = false
+    private let timeSyncService: TimeSyncService
+    private var syncTask: Task<Void, Never>?
+    private var syncGeneration = 0
+    private var nextAutomaticSync = Date.distantPast
+    private var consecutiveFailures = 0
 
-    init() {
+    init(timeSyncService: TimeSyncService = TimeSyncService()) {
+        self.timeSyncService = timeSyncService
         currentServer = UserDefaults.standard.string(forKey: "ntpServer") ?? AppSettings.defaultNTP
         scheduleNextTick()
         sync()
     }
 
-    /// 切换/重设校时服务器并立即校时
+    deinit {
+        syncTask?.cancel()
+    }
+
+    /// 切换/重设首选校时服务器并立即校时。旧请求即使晚到也不会覆盖新状态。
     func setServer(_ host: String) {
         let h = host.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !h.isEmpty else { return }
         currentServer = h
-        sync()
+        consecutiveFailures = 0
+        startSync()
     }
 
-    /// 向 NTP 服务器校时，更新偏移
+    /// 手动校时会绕过自动重试的退避时间。
     func sync() {
-        if isSyncing { return }
-        isSyncing = true
-        syncStatus = .syncing
+        startSync()
+    }
+
+    private func startSync() {
+        syncGeneration &+= 1
+        let generation = syncGeneration
         let server = currentServer
-        Task {
-            let result = try? await NTPClient.offset(host: server)
-            await MainActor.run {
-                self.isSyncing = false
-                self.lastSync = Date()
-                if let off = result {
-                    self.ntpOffset = off
-                    self.syncStatus = .synced(off)
-                } else {
-                    self.syncStatus = .failed
-                }
+        syncTask?.cancel()
+        syncStatus = .syncing
+
+        let service = timeSyncService
+        syncTask = Task { [weak self] in
+            do {
+                let result = try await service.synchronize(preferredHost: server)
+                guard !Task.isCancelled, let self, self.syncGeneration == generation else { return }
+                self.syncTask = nil
+                self.ntpOffset = result.offset
+                self.syncStatus = .synced(result)
+                self.consecutiveFailures = 0
+                self.nextAutomaticSync = Date().addingTimeInterval(6 * 3600)
+            } catch is CancellationError {
+                // 被新的校时请求取代，不更新界面或重试节奏。
+            } catch {
+                guard !Task.isCancelled, let self, self.syncGeneration == generation else { return }
+                self.syncTask = nil
+                self.syncStatus = .failed((error as? LocalizedError)?.errorDescription ?? "校时服务暂不可用")
+                self.consecutiveFailures += 1
+                let delays: [TimeInterval] = [5 * 60, 15 * 60, 30 * 60, 60 * 60]
+                let index = min(self.consecutiveFailures - 1, delays.count - 1)
+                self.nextAutomaticSync = Date().addingTimeInterval(delays[index])
             }
         }
     }
 
-    /// 对齐到整秒边界刷新，避免显示相位滞后导致看起来慢一秒
+    /// 对齐到整秒边界刷新。时区不影响秒数；正常情况下秒数始终读取本机时间。
     private func scheduleNextTick() {
         let nowTI = Date().timeIntervalSinceReferenceDate
         // 下一个整秒 + 20ms 余量，确保读到的就是新的整秒
         let delay = floor(nowTI) + 1.0 + 0.02 - nowTI
         let t = Timer(timeInterval: delay, repeats: false) { [weak self] _ in
-            guard let self = self else { return }
-            self.now = Date().addingTimeInterval(self.ntpOffset)
-            // 后台每 6 小时自动校准一次
-            if Date().timeIntervalSince(self.lastSync) > 6 * 3600 { self.sync() }
-            self.scheduleNextTick()
+            Task { @MainActor [weak self] in
+                guard let self = self else { return }
+                let systemNow = Date()
+                // 系统时钟只存在毫秒级偏移时，不让网络校时改变秒钟显示。
+                self.now = systemNow.addingTimeInterval(abs(self.ntpOffset) >= 1 ? self.ntpOffset : 0)
+                if systemNow >= self.nextAutomaticSync, self.syncTask == nil { self.startSync() }
+                self.scheduleNextTick()
+            }
         }
         RunLoop.main.add(t, forMode: .common)
         timer = t
@@ -118,7 +146,8 @@ final class Clock: ObservableObject {
         var s = "周\(weekday) \(m)/\(d) "
         s += String(format: "%02d:%02d", h, mi)
         if settings.showSeconds {
-            s += String(format: ":%02d", c.second ?? 0)
+            let seconds = abs(ntpOffset) < 1 ? cal.component(.second, from: Date()) : (c.second ?? 0)
+            s += String(format: ":%02d", seconds)
         }
         return s
     }

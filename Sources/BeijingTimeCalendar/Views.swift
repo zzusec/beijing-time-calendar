@@ -469,7 +469,10 @@ struct SettingsPanel: View {
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.small)
-                .disabled(updater.status == .checking)
+                .disabled({
+                    if case .upgrading = updater.status { return true }
+                    return updater.status == .checking
+                }())
             }
         }
         .padding(.horizontal, 14)
@@ -495,13 +498,12 @@ struct SettingsPanel: View {
                 ProgressView().controlSize(.small).scaleEffect(0.7)
                 Text("校时中…").font(.system(size: 11)).foregroundStyle(.secondary)
             }
-        case .synced(let off):
-            let ms = Int(abs(off) * 1000)
-            Text(ms <= 50 ? "已校准 · 误差<50ms"
-                          : "已校准 · 本地\(off > 0 ? "慢" : "快")\(ms)ms")
+        case .synced(let result):
+            let ms = Int(abs(result.offset) * 1000)
+            Text("已校准 · \(result.source.statusText) · 本地偏移\(result.offset > 0 ? "慢" : "快")\(ms)ms")
                 .font(.system(size: 11)).foregroundStyle(.green)
-        case .failed:
-            Text("校时失败，检查网络/服务器").font(.system(size: 11)).foregroundStyle(.red)
+        case .failed(let message):
+            Text("校时失败 · \(message)").font(.system(size: 11)).foregroundStyle(.red)
         }
     }
 
@@ -516,14 +518,19 @@ struct SettingsPanel: View {
             Text("已是最新").font(.system(size: 11)).foregroundStyle(.secondary)
         case .available(let v, let url):
             Button {
-                NSWorkspace.shared.open(url)
+                updater.upgrade(version: v, url: url)
             } label: {
-                Text("发现 \(v)，去下载").font(.system(size: 11, weight: .semibold))
+                Text("升级到 \(v)").font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(.white)
                     .padding(.horizontal, 8).padding(.vertical, 2)
                     .background(Color.orange).clipShape(Capsule())
             }
             .buttonStyle(.plain)
+        case .upgrading(let text):
+            HStack(spacing: 4) {
+                ProgressView().controlSize(.small).scaleEffect(0.7)
+                Text(text).font(.system(size: 11)).foregroundStyle(.secondary)
+            }
         case .failed(let msg):
             Text(msg).font(.system(size: 11)).foregroundStyle(.red)
         }

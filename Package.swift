@@ -8,6 +8,11 @@ let package = Package(
         .executableTarget(
             name: "BeijingTimeCalendar",
             path: "Sources/BeijingTimeCalendar"
+        ),
+        .testTarget(
+            name: "BeijingTimeCalendarTests",
+            dependencies: ["BeijingTimeCalendar"],
+            path: "Tests/BeijingTimeCalendarTests"
         )
     ]
 )
