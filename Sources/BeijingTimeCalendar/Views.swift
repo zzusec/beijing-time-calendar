@@ -461,18 +461,7 @@ struct SettingsPanel: View {
             HStack(spacing: 8) {
                 Text("版本 \(AppInfo.version)").font(.system(size: 12))
                 Spacer()
-                updateStatusView
-                Button {
-                    updater.check()
-                } label: {
-                    Text("检查更新").font(.system(size: 11, weight: .medium))
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-                .disabled({
-                    if case .upgrading = updater.status { return true }
-                    return updater.status == .checking
-                }())
+                updateArea
             }
         }
         .padding(.horizontal, 14)
@@ -498,31 +487,34 @@ struct SettingsPanel: View {
                 ProgressView().controlSize(.small).scaleEffect(0.7)
                 Text("校时中…").font(.system(size: 11)).foregroundStyle(.secondary)
             }
-        case .synced(let result):
-            let ms = Int(abs(result.offset) * 1000)
-            Text("已校准 · \(result.source.statusText) · 本地偏移\(result.offset > 0 ? "慢" : "快")\(ms)ms")
-                .font(.system(size: 11)).foregroundStyle(.green)
-        case .failed(let message):
-            Text("校时失败 · \(message)").font(.system(size: 11)).foregroundStyle(.red)
+        case .synced:
+            Text("已校准").font(.system(size: 11)).foregroundStyle(.green)
+        case .failed:
+            Text("校时失败，请检查网络").font(.system(size: 11)).foregroundStyle(.red)
         }
     }
 
+    /// 版本行右侧的唯一更新控件：发现新版时“检查更新”原位变成“立即更新”。
     @ViewBuilder
-    var updateStatusView: some View {
+    var updateArea: some View {
         switch updater.status {
         case .idle:
-            EmptyView()
+            checkUpdateButton
         case .checking:
-            ProgressView().controlSize(.small).scaleEffect(0.7)
+            HStack(spacing: 4) {
+                ProgressView().controlSize(.small).scaleEffect(0.7)
+                Text("检查中…").font(.system(size: 11)).foregroundStyle(.secondary)
+            }
         case .upToDate:
             Text("已是最新").font(.system(size: 11)).foregroundStyle(.secondary)
+            checkUpdateButton
         case .available(let v, let url):
             Button {
                 updater.upgrade(version: v, url: url)
             } label: {
-                Text("升级到 \(v)").font(.system(size: 11, weight: .semibold))
+                Text("立即更新").font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(.white)
-                    .padding(.horizontal, 8).padding(.vertical, 2)
+                    .padding(.horizontal, 10).padding(.vertical, 3)
                     .background(Color.orange).clipShape(Capsule())
             }
             .buttonStyle(.plain)
@@ -533,6 +525,17 @@ struct SettingsPanel: View {
             }
         case .failed(let msg):
             Text(msg).font(.system(size: 11)).foregroundStyle(.red)
+            checkUpdateButton
         }
+    }
+
+    var checkUpdateButton: some View {
+        Button {
+            updater.check()
+        } label: {
+            Text("检查更新").font(.system(size: 11, weight: .medium))
+        }
+        .buttonStyle(.bordered)
+        .controlSize(.small)
     }
 }
