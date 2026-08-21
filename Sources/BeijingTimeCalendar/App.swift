@@ -51,6 +51,7 @@ final class Clock: ObservableObject {
 
     @Published var now = Date()
     @Published var syncStatus: SyncStatus = .idle
+    @Published private(set) var lastSyncAt: Date?
 
     private var timer: Timer?
     private var ntpOffset: TimeInterval = 0      // 真实时间 = 本地时间 + ntpOffset
@@ -101,8 +102,9 @@ final class Clock: ObservableObject {
                 self.syncTask = nil
                 self.ntpOffset = result.offset
                 self.syncStatus = .synced(result)
+                self.lastSyncAt = Date().addingTimeInterval(abs(result.offset) >= 1 ? result.offset : 0)
                 self.consecutiveFailures = 0
-                self.nextAutomaticSync = Date().addingTimeInterval(6 * 3600)
+                self.nextAutomaticSync = Date().addingTimeInterval(3600)
             } catch is CancellationError {
                 // 被新的校时请求取代，不更新界面或重试节奏。
             } catch {
@@ -151,6 +153,14 @@ final class Clock: ObservableObject {
         }
         return s
     }
+}
+
+/// 距上次校时的相对描述："刚刚 / N 分钟前 / N 小时前"
+func relativeAgo(_ seconds: TimeInterval) -> String {
+    let m = Int(max(0, seconds) / 60)
+    if m < 1 { return "刚刚" }
+    if m < 60 { return "\(m) 分钟前" }
+    return "\(m / 60) 小时前"
 }
 
 // MARK: - 设置（持久化）

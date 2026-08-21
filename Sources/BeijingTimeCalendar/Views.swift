@@ -476,6 +476,12 @@ struct SettingsPanel: View {
         }
     }
 
+    /// 距上次成功校时多久，随 clock.now 每秒重算
+    var syncAgoText: String? {
+        guard let t = clock.lastSyncAt else { return nil }
+        return relativeAgo(clock.now.timeIntervalSince(t))
+    }
+
     var zoneLabel: String {
         AppSettings.commonZones.first { $0.0 == settings.timeZoneID }?.1 ?? settings.timeZoneID
     }
@@ -496,7 +502,12 @@ struct SettingsPanel: View {
                 Text("校时中…").font(.system(size: 11)).foregroundStyle(.secondary)
             }
         case .synced:
-            Text("已校准").font(.system(size: 11)).foregroundStyle(.green)
+            HStack(spacing: 4) {
+                Text("已校准").font(.system(size: 11)).foregroundStyle(.green)
+                if let ago = syncAgoText {
+                    Text(ago).font(.system(size: 11)).foregroundStyle(.secondary)
+                }
+            }
         case .failed:
             Text("校时失败，请检查网络").font(.system(size: 11)).foregroundStyle(.red)
         }

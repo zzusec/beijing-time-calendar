@@ -119,3 +119,14 @@ private actor CallRecorder {
         entries
     }
 }
+
+final class RelativeAgoTests: XCTestCase {
+    func testRelativeAgo() {
+        XCTAssertEqual(relativeAgo(-5), "刚刚")
+        XCTAssertEqual(relativeAgo(59), "刚刚")
+        XCTAssertEqual(relativeAgo(60), "1 分钟前")
+        XCTAssertEqual(relativeAgo(59 * 60), "59 分钟前")
+        XCTAssertEqual(relativeAgo(3600), "1 小时前")
+        XCTAssertEqual(relativeAgo(7300), "2 小时前")
+    }
+}
