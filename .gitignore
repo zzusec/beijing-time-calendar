@@ -6,3 +6,4 @@ AppIcon.iconset/
 .swiftpm/
 *.dmg
 dist/
+.claude/
