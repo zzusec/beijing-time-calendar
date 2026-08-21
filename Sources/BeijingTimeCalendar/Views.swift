@@ -82,7 +82,7 @@ struct HeaderView: View {
                 .monospacedDigit()
                 .foregroundStyle(.primary)
             HStack(spacing: 8) {
-                Text("\(c.year ?? 0)年\(c.month ?? 0)月\(c.day ?? 0)日")
+                Text("\(String(c.year ?? 0))年\(c.month ?? 0)月\(c.day ?? 0)日")
                 Text(weekday)
                     .foregroundStyle(((c.weekday ?? 1) == 1 || (c.weekday ?? 1) == 7) ? .red : .primary)
             }
@@ -105,7 +105,7 @@ struct MonthNavBar: View {
         return HStack {
             navButton("chevron.left") { model.shiftMonth(-1, tz: settings.timeZone) }
             Spacer()
-            Text("\(c.year ?? 0) 年 \(c.month ?? 0) 月")
+            Text("\(String(c.year ?? 0)) 年 \(c.month ?? 0) 月")
                 .font(.system(size: 15, weight: .semibold))
             Button { model.goToday() } label: {
                 HStack(spacing: 3) {
@@ -278,7 +278,7 @@ struct SelectedDetail: View {
 
         return HStack(alignment: .center, spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
-                Text("\(c.year ?? 0)年\(c.month ?? 0)月\(c.day ?? 0)日 \(weekday)")
+                Text("\(String(c.year ?? 0))年\(c.month ?? 0)月\(c.day ?? 0)日 \(weekday)")
                     .font(.system(size: 13, weight: .semibold))
                 Text("农历\(CN.ganzhiYear(lc.year ?? 1))年〔\(CN.zodiacName(lc.year ?? 1))〕 \(CN.lunarMonths[(info.lunarMonth-1)%12])\(CN.lunarDayName(info.lunarDay))")
                     .font(.system(size: 11))
@@ -371,46 +371,50 @@ struct SettingsPanel: View {
         clock.setServer(h)
     }
 
+    /// 设置行统一骨架：左标签 + 右控件，右缘对齐
+    private func row<C: View>(_ title: String, muted: Bool = false, @ViewBuilder control: () -> C) -> some View {
+        HStack(spacing: 8) {
+            Text(title)
+                .font(.system(size: muted ? 11 : 12, weight: muted ? .regular : .medium))
+                .foregroundStyle(muted ? AnyShapeStyle(.secondary) : AnyShapeStyle(.primary))
+            Spacer(minLength: 8)
+            control().frame(width: 150, alignment: .trailing)
+        }
+        .frame(height: 22)
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Text("时区").font(.system(size: 12, weight: .medium))
-                Spacer()
-                Picker("", selection: Binding(
-                    get: { settings.timeZoneID },
-                    set: { settings.timeZoneID = $0 }
-                )) {
+        VStack(alignment: .leading, spacing: 8) {
+            row("时区") {
+                Menu(zoneLabel) {
                     ForEach(AppSettings.commonZones, id: \.0) { z in
-                        Text(z.1).tag(z.0)
+                        Button(z.1) { settings.timeZoneID = z.0 }
                     }
                 }
+            }
+            row("菜单栏显示秒") {
+                Toggle("", isOn: Binding(
+                    get: { settings.showSeconds },
+                    set: { settings.showSeconds = $0 }
+                ))
                 .labelsHidden()
-                .frame(width: 150)
+                .toggleStyle(.switch)
+                .controlSize(.small)
             }
-            Toggle(isOn: Binding(
-                get: { settings.showSeconds },
-                set: { settings.showSeconds = $0 }
-            )) {
-                Text("菜单栏显示秒").font(.system(size: 12))
+            row("开机自启动") {
+                Toggle("", isOn: Binding(
+                    get: { launchAtLogin },
+                    set: { v in launchAtLogin = v; LoginItem.set(v) }
+                ))
+                .labelsHidden()
+                .toggleStyle(.switch)
+                .controlSize(.small)
             }
-            .toggleStyle(.switch)
-            .controlSize(.small)
 
-            Toggle(isOn: Binding(
-                get: { launchAtLogin },
-                set: { v in launchAtLogin = v; LoginItem.set(v) }
-            )) {
-                Text("开机自启动").font(.system(size: 12))
-            }
-            .toggleStyle(.switch)
-            .controlSize(.small)
-
-            Divider()
+            Divider().padding(.vertical, 2)
 
             // NTP 网络校时
-            HStack {
-                Text("校时服务器").font(.system(size: 12, weight: .medium))
-                Spacer()
+            row("校时服务器") {
                 Menu(ntpLabel) {
                     ForEach(AppSettings.ntpServers, id: \.0) { s in
                         Button("\(s.1)  (\(s.0))") { selectPreset(s.0) }
@@ -418,7 +422,6 @@ struct SettingsPanel: View {
                     Divider()
                     Button("自定义…") { enableCustom() }
                 }
-                .frame(width: 150)
             }
             if settings.useCustomNTP {
                 // 自定义模式：可输入
@@ -433,19 +436,18 @@ struct SettingsPanel: View {
                 }
             } else {
                 // 预置模式：只读展示地址
-                HStack {
-                    Text("地址").font(.system(size: 11)).foregroundStyle(.secondary)
-                    Spacer()
+                row("地址", muted: true) {
                     Text(settings.ntpServer)
                         .font(.system(size: 11, design: .monospaced))
                         .foregroundStyle(.secondary)
                         .textSelection(.enabled)
+                        .lineLimit(1)
                 }
             }
 
             HStack(spacing: 8) {
                 syncStatusView
-                Spacer()
+                Spacer(minLength: 8)
                 Button {
                     clock.setServer(settings.ntpServer)
                 } label: {
@@ -455,14 +457,16 @@ struct SettingsPanel: View {
                 .controlSize(.small)
                 .disabled(clock.syncStatus == .syncing)
             }
+            .frame(height: 22)
 
-            Divider()
+            Divider().padding(.vertical, 2)
 
             HStack(spacing: 8) {
-                Text("版本 \(AppInfo.version)").font(.system(size: 12))
-                Spacer()
+                Text("版本 \(AppInfo.version)").font(.system(size: 12, weight: .medium))
+                Spacer(minLength: 8)
                 updateArea
             }
+            .frame(height: 22)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
@@ -470,6 +474,10 @@ struct SettingsPanel: View {
             launchAtLogin = LoginItem.isEnabled
             if settings.useCustomNTP { customInput = settings.ntpServer }
         }
+    }
+
+    var zoneLabel: String {
+        AppSettings.commonZones.first { $0.0 == settings.timeZoneID }?.1 ?? settings.timeZoneID
     }
 
     var ntpLabel: String {
